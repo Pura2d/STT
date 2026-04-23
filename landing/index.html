@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Finder — 실시간 한국어 음성 인식</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f0f13; --surface: #1a1a24; --border: #2e2e42;
+      --accent: #6c63ff; --accent2: #a78bfa;
+      --text: #e2e2f0; --muted: #8888aa;
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    }
+    .hero {
+      width: 100%; max-width: 860px;
+      padding: 80px 24px 48px; text-align: center;
+    }
+    .badge {
+      display: inline-block; padding: 4px 14px;
+      border-radius: 99px; border: 1px solid var(--accent);
+      color: var(--accent2); font-size: 0.78rem;
+      letter-spacing: .06em; margin-bottom: 24px;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 700; line-height: 1.15;
+      background: linear-gradient(135deg, #fff 30%, var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 20px;
+    }
+    .subtitle {
+      color: var(--muted); font-size: 1.1rem; line-height: 1.7;
+      max-width: 560px; margin: 0 auto 48px;
+    }
+    .features {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px; width: 100%; max-width: 860px; padding: 0 24px 64px;
+    }
+    .feat {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 24px 20px; text-align: center;
+    }
+    .feat-icon { font-size: 2rem; margin-bottom: 12px; }
+    .feat-title { font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; }
+    .feat-desc { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+    .terms-section { width: 100%; max-width: 860px; padding: 0 24px 32px; }
+    .terms-section h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; }
+    .terms-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px 24px; height: 180px;
+      overflow-y: auto; font-size: 0.82rem; color: var(--muted);
+      line-height: 1.8; margin-bottom: 16px;
+    }
+    .terms-box::-webkit-scrollbar { width: 6px; }
+    .terms-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .terms-box p { margin-bottom: 10px; }
+    .terms-box strong { color: var(--text); }
+    .agree-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 32px; cursor: pointer; user-select: none;
+    }
+    .agree-row input[type="checkbox"] {
+      width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0;
+    }
+    .agree-label { font-size: 0.92rem; }
+    .download-section {
+      width: 100%; max-width: 860px;
+      padding: 0 24px 80px; display: flex; flex-direction: column; gap: 16px;
+    }
+    .dl-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; transition: border-color .2s;
+    }
+    .dl-card:hover { border-color: var(--accent); }
+    .dl-info { flex: 1; }
+    .dl-name { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+    .dl-desc { font-size: 0.82rem; color: var(--muted); }
+    .dl-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: 10px; border: none;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      text-decoration: none; white-space: nowrap;
+      transition: opacity .15s, filter .15s;
+    }
+    .dl-btn.primary { background: var(--accent); color: #fff; }
+    .dl-btn.secondary { background: var(--border); color: var(--text); }
+    .dl-btn.disabled { opacity: .35; pointer-events: none; }
+    .dl-btn:not(.disabled):hover { filter: brightness(1.15); }
+    footer {
+      border-top: 1px solid var(--border); width: 100%;
+      text-align: center; padding: 24px;
+      font-size: 0.78rem; color: var(--muted);
+    }
+    footer a { color: var(--accent2); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <section class="hero">
+    <div class="badge">Windows x64 &middot; 무료 &middot; 오프라인</div>
+    <h1>Voice Finder</h1>
+    <p class="subtitle">
+      Vosk 기반 완전 오프라인 실시간 한국어 음성 인식.<br />
+      인터넷 없이도 빠르고 정확하게 — 내 PC에서만 동작합니다.
+    </p>
+  </section>
+
+  <div class="features">
+    <div class="feat">
+      <div class="feat-icon">🎙️</div>
+      <div class="feat-title">실시간 STT</div>
+      <div class="feat-desc">말하는 즉시 텍스트로 변환, 지연 최소화</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">🔒</div>
+      <div class="feat-title">완전 오프라인</div>
+      <div class="feat-desc">음성 데이터가 외부 서버로 전송되지 않음</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📝</div>
+      <div class="feat-title">세션 관리</div>
+      <div class="feat-desc">대화 세션 저장 및 텍스트 내보내기</div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">📖</div>
+      <div class="feat-title">어휘 교정</div>
+      <div class="feat-desc">사용자 정의 단어로 인식 정확도 향상</div>
+    </div>
+  </div>
+
+  <div class="terms-section">
+    <h2>이용 약관 및 개인정보 처리방침</h2>
+    <div class="terms-box">
+      <p><strong>제1조 (목적)</strong><br />본 약관은 Voice Finder(이하 "소프트웨어")의 사용 조건을 규정합니다.</p>
+      <p><strong>제2조 (음성 데이터 처리)</strong><br />본 소프트웨어는 모든 음성 인식을 사용자의 로컬 기기에서만 처리합니다. 수집된 음성 데이터는 외부 서버로 전송되지 않으며, 세션 텍스트는 사용자 기기에만 저장됩니다.</p>
+      <p><strong>제3조 (소프트웨어 사용)</strong><br />소프트웨어는 개인 및 업무 목적으로 무료로 사용할 수 있습니다. 소프트웨어의 역공학, 수정, 재배포는 금지됩니다.</p>
+      <p><strong>제4조 (면책 조항)</strong><br />소프트웨어는 "있는 그대로" 제공됩니다. 음성 인식 정확도나 특정 용도에의 적합성을 보증하지 않으며, 사용으로 발생하는 손해에 대해 책임지지 않습니다.</p>
+      <p><strong>제5조 (마이크 권한)</strong><br />음성 인식 기능 사용을 위해 마이크 접근 권한이 필요합니다. 이 권한은 음성 인식 목적으로만 사용되며 녹음 파일은 저장되지 않습니다.</p>
+      <p><strong>제6조 (업데이트)</strong><br />소프트웨어는 사전 고지 없이 업데이트될 수 있습니다. 최신 버전 사용을 권장합니다.</p>
+    </div>
+    <label class="agree-row">
+      <input type="checkbox" id="agreeCheck" />
+      <span class="agree-label">이용 약관 및 개인정보 처리방침에 동의합니다.</span>
+    </label>
+  </div>
+
+  <div class="download-section">
+    <div class="dl-card">
+      <div class="dl-info">
+        <div class="dl-name">Voice Finder Setup 1.0.0.exe</div>
+        <div class="dl-desc">설치 파일 — 바탕화면 바로가기 생성, 제어판에서 제거 가능 <strong>(권장)</strong></div>
+      </div>
+      <a id="btnSetup"
+         href="https://github.com/Pura2d/STT/releases/download/v1.0.0/Voice.Finder.Setup.1.0.0.exe"
+         class="dl-btn primary disabled">
+        &#11015; 설치 파일
+      </a>
+    </div>
+    <div class="dl-card">
+      <div class="dl-info">
+        <div class="dl-name">Voice Finder 1.0.0.exe</div>
+        <div class="dl-desc">포터블 — 설치 없이 바로 실행, USB 이동 사용 가능</div>
+      </div>
+      <a id="btnPortable"
+         href="https://github.com/Pura2d/STT/releases/download/v1.0.0/Voice.Finder.1.0.0.exe"
+         class="dl-btn secondary disabled">
+        &#11015; 포터블
+      </a>
+    </div>
+  </div>
+
+  <footer>
+    <p>
+      Voice Finder v1.0.0 &nbsp;&middot;&nbsp;
+      <a href="https://github.com/Pura2d/STT" target="_blank" rel="noopener">GitHub</a>
+      &nbsp;&middot;&nbsp; Windows 10 x64 이상 필요
+    </p>
+  </footer>
+
+  <script>
+    const check = document.getElementById('agreeCheck');
+    const btns  = [document.getElementById('btnSetup'), document.getElementById('btnPortable')];
+    check.addEventListener('change', () => {
+      btns.forEach(b => b.classList.toggle('disabled', !check.checked));
+    });
+  </script>
+
+</body>
+</html>
