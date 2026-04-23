@@ -1,0 +1,13 @@
+node_modules/
+__pycache__/
+*.py[cod]
+*.pyd
+build/
+dist/
+release/
+vosk-model-small-ko-0.22/
+*.log
+.env
+userData/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,106 @@
+{
+  "name": "voice-finder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "실시간 한국어 음성 인식 데스크톱 앱 (Vosk + Electron)",
+  "author": "Voice Finder",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "electron:dev": "electron .",
+    "build:py": "pyinstaller stt-server.spec --noconfirm",
+    "electron:build": "electron-builder",
+    "dist": "npm run build:py && npm run electron:build",
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-deb": "^7.11.1",
+    "@electron-forge/maker-rpm": "^7.11.1",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
+    "@electron-forge/plugin-fuses": "^7.11.1",
+    "@electron/fuses": "^1.8.0",
+    "async-exit-hook": "^2.0.1",
+    "electron": "41.2.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.voicefinder.desktop",
+    "productName": "Voice Finder",
+    "copyright": "Copyright © 2025",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/main.cjs",
+      "electron/preload.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": "electron/renderer",
+        "to": "renderer",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "dist/stt-server",
+        "to": "stt-server",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "vosk-model-small-ko-0.22/vosk-model-small-ko-0.22",
+        "to": "vosk-model-small-ko-0.22",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "실시간 음성 인식(STT)을 위해 마이크를 사용합니다."
+      }
+    }
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1"
+  }
+}

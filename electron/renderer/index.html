@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Finding</title>
+  <style>
+    :root {
+      --bg:          #0a0b0f;
+      --bg-panel:    #0f1117;
+      --bg-surface:  #181c24;
+      --bg-msg:      #151922;
+      --border:      rgba(255,255,255,0.07);
+      --text:        #dde1ea;
+      --text-dim:    #99a4b8;
+      --muted:       #4e5668;
+      --accent:      #00c8ef;
+      --accent-soft: rgba(0,200,239,0.09);
+      --sidebar-l:   248px;
+      --sidebar-r:   192px;
+      --header-h:    48px;
+      --bottom-h:    76px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .header {
+      height: var(--header-h);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      padding: 0 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-panel);
+      gap: 0.55rem;
+      z-index: 20;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 0.45rem;
+      font-size: 0.88rem; font-weight: 700; letter-spacing: -0.01em;
+      color: var(--text); user-select: none; flex-shrink: 0;
+    }
+    .logo-icon {
+      width: 26px; height: 26px; border-radius: 8px;
+      background: radial-gradient(circle at 38% 38%, #1ad6f5 0%, #0a7fa0 45%, #053a50 100%);
+      box-shadow: 0 0 10px rgba(0,200,239,0.4);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .logo-icon svg { width: 14px; height: 14px; color: #fff; }
+    .header-spacer { flex: 1; }
+    .header-actions { display: flex; gap: 0.35rem; }
+    .btn-hdr {
+      padding: 0.28rem 0.8rem; border-radius: 6px;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.04);
+      color: var(--text); font-size: 0.76rem; font-weight: 500;
+      cursor: pointer; transition: background 0.14s;
+      display: flex; align-items: center; gap: 0.3rem;
+    }
+    .btn-hdr svg { width: 13px; height: 13px; opacity: 0.75; }
+    .btn-hdr:hover { background: rgba(255,255,255,0.09); }
+    .btn-hdr--accent { background: var(--accent-soft); border-color: rgba(0,200,239,0.28); color: var(--accent); }
+    .btn-hdr--accent:hover { background: rgba(0,200,239,0.16); }
+    .btn-hdr--danger { color: #ff7c6e; }
+    .btn-hdr--danger:hover { background: rgba(255,80,60,0.1); }
+
+    /* ── Body ────────────────────────────────────────────────── */
+    .body { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+
+    /* ── Left sidebar ────────────────────────────────────────── */
+    .sidebar-left {
+      width: var(--sidebar-l); flex-shrink: 0;
+      display: flex; flex-direction: column;
+      background: var(--bg-panel); border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .sidebar-head {
+      padding: 0.6rem 0.75rem 0.5rem;
+      font-size: 0.67rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .btn-new-sm {
+      padding: 0.18rem 0.5rem; border-radius: 5px;
+      border: 1px dashed rgba(0,200,239,0.35); background: var(--accent-soft);
+      color: var(--accent); font-size: 0.67rem; font-weight: 600;
+      cursor: pointer; transition: background 0.14s;
+    }
+    .btn-new-sm:hover { background: rgba(0,200,239,0.15); }
+    .sidebar-search {
+      display: flex; align-items: center; gap: 0.4rem;
+      padding: 0.4rem 0.5rem; margin: 0.4rem 0.4rem 0;
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: 7px; transition: border-color 0.14s; flex-shrink: 0;
+    }
+    .sidebar-search:focus-within { border-color: rgba(0,200,239,0.4); }
+    .sidebar-search svg { width: 12px; height: 12px; color: var(--muted); flex-shrink: 0; }
+    .sidebar-search input {
+      flex: 1; min-width: 0; border: none; background: transparent;
+      color: var(--text); font-size: 0.74rem; outline: none;
+    }
+    .sidebar-search input::placeholder { color: var(--muted); }
+
+    .session-list {
+      list-style: none; padding: 0.3rem 0.35rem;
+      overflow-y: auto; flex: 1;
+    }
+    .session-list::-webkit-scrollbar { width: 4px; }
+    .session-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+    .session-list li { display: flex; align-items: center; gap: 0.15rem; }
+    .session-list li .session-item { flex: 1; min-width: 0; }
+    .session-item {
+      width: 100%; text-align: left; padding: 0.5rem 0.6rem;
+      margin-bottom: 0.08rem; border: none; border-radius: 8px;
+      background: transparent; color: var(--text);
+      cursor: pointer; display: block; transition: background 0.12s;
+    }
+    .session-item:hover { background: rgba(255,255,255,0.05); }
+    .session-item.active { background: var(--accent-soft); box-shadow: inset 2px 0 0 0 var(--accent); }
+    .session-item-title {
+      font-size: 0.78rem; font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .session-item-preview {
+      margin-top: 0.18rem; font-size: 0.66rem; color: var(--muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .session-empty { font-size: 0.73rem; color: var(--muted); padding: 0.75rem 0.6rem; text-align: center; line-height: 1.7; }
+    .btn-session-del {
+      flex-shrink: 0; border: none; background: transparent;
+      color: var(--muted); font-size: 0.62rem; cursor: pointer;
+      padding: 0.25rem 0.3rem; border-radius: 4px;
+      opacity: 0; transition: opacity 0.12s, color 0.12s; line-height: 1;
+    }
+    .session-list li:hover .btn-session-del { opacity: 1; }
+    .btn-session-del:hover { color: #ff7c6e; background: rgba(255,80,60,0.1); }
+
+    /* ── Center: messages ─────────────────────────────────────── */
+    .main-center { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+    .messages-area {
+      flex: 1; overflow-y: auto;
+      padding: 1.4rem 1.8rem calc(var(--bottom-h) + 1.5rem);
+      display: flex; flex-direction: column; gap: 1rem;
+      scroll-behavior: smooth;
+    }
+    .messages-area::-webkit-scrollbar { width: 5px; }
+    .messages-area::-webkit-scrollbar-track { background: transparent; }
+    .messages-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    .messages-area::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+
+    /* ── Welcome state ────────────────────────────────────────── */
+    .welcome-wrap {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 0.75rem; text-align: center; user-select: none;
+      min-height: 220px;
+    }
+    .welcome-icon {
+      width: 56px; height: 56px; border-radius: 50%;
+      border: 1.5px solid rgba(0,200,239,0.2);
+      background: var(--accent-soft);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 0.1rem;
+    }
+    .welcome-icon svg { width: 24px; height: 24px; color: var(--accent); opacity: 0.65; }
+    .welcome-mic-btn {
+      cursor: pointer;
+      transition: transform 0.12s, box-shadow 0.2s, background 0.2s;
+    }
+    .welcome-mic-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 0 2px rgba(0,200,239,0.25), 0 0 20px rgba(0,200,239,0.18);
+    }
+    .welcome-mic-btn:active { transform: scale(0.96); }
+    .welcome-mic-btn.live {
+      background: radial-gradient(circle at 38% 38%, rgba(0,200,239,0.35) 0%, rgba(0,200,239,0.08) 70%);
+      border-color: rgba(0,200,239,0.6);
+      box-shadow: 0 0 0 2px rgba(0,200,239,0.25), 0 0 26px rgba(0,200,239,0.35);
+    }
+    .welcome-title { font-size: 0.95rem; font-weight: 600; color: var(--text-dim); }
+    .welcome-sub { font-size: 0.8rem; color: var(--muted); line-height: 1.6; }
+
+    /* ── Recording banner ────────────────────────────────────────── */
+    .recording-banner {
+      display: flex; align-items: center; gap: 0.55rem;
+      padding: 0.55rem 1rem; border-radius: 10px;
+      background: rgba(0,200,239,0.07);
+      border: 1px solid rgba(0,200,239,0.22);
+      font-size: 0.82rem; color: var(--accent);
+      flex-shrink: 0; user-select: none;
+      animation: banner-fade 2.6s ease-in-out infinite;
+    }
+    .recording-banner .banner-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent); flex-shrink: 0;
+      box-shadow: 0 0 5px var(--accent);
+      animation: rec-blink 1s ease-in-out infinite;
+    }
+    @keyframes banner-fade { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+    .recording-banner.hidden { display: none; }
+
+    /* Stop icon inside mic button when live */
+    .mic-btn .icon-stop { display: none; }
+    .mic-btn.live .icon-stop { display: block; }
+    .mic-btn.live .icon-live { display: none !important; }
+    .mic-btn.live .icon-idle { display: none !important; }
+
+    /* ── Message bubbles ──────────────────────────────────────── */
+    .msg-row {
+      display: flex; align-items: flex-end; gap: 0.55rem;
+      animation: msg-appear 0.2s ease-out;
+    }
+    @keyframes msg-appear {
+      from { opacity: 0; transform: translateY(5px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .msg-avatar {
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      background: radial-gradient(circle at 38% 38%, #1ad6f5 0%, #0a7fa0 50%, #053a50 100%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .msg-avatar svg { width: 13px; height: 13px; color: rgba(255,255,255,0.85); }
+
+    .msg-bubble {
+      max-width: min(72%, 540px);
+      background: var(--bg-msg);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 16px 16px 16px 4px;
+      padding: 0.8rem 1.05rem 0.5rem;
+      word-break: keep-all; overflow-wrap: break-word;
+    }
+    .msg-text {
+      font-size: 0.96rem; line-height: 1.78;
+      color: var(--text); white-space: pre-wrap;
+      letter-spacing: -0.005em;
+    }
+    .msg-footer {
+      margin-top: 0.38rem;
+      display: flex; align-items: center; justify-content: flex-end; gap: 0.4rem;
+    }
+    .msg-time { font-size: 0.62rem; color: var(--muted); }
+    .msg-badge {
+      font-size: 0.59rem; color: rgba(0,200,239,0.65);
+      background: rgba(0,200,239,0.08); border: 1px solid rgba(0,200,239,0.18);
+      border-radius: 3px; padding: 0 3px; line-height: 1.55;
+    }
+
+    /* partial bubble */
+    .msg-row--partial .msg-avatar { opacity: 0.4; }
+    .msg-row--partial .msg-bubble {
+      border-style: dashed; border-color: rgba(0,200,239,0.2);
+      background: rgba(0,200,239,0.03);
+    }
+    .msg-row--partial .msg-text { color: rgba(160,205,215,0.6); font-style: italic; }
+
+    /* corrected word highlight */
+    .corrected-word {
+      background: rgba(0,200,239,0.12);
+      border-bottom: 1.5px dashed rgba(0,200,239,0.55);
+      border-radius: 2px; cursor: help; padding: 0 2px;
+    }
+
+    /* ── Right sidebar: vocabulary ────────────────────────────── */
+    .sidebar-right {
+      width: var(--sidebar-r); flex-shrink: 0;
+      display: flex; flex-direction: column;
+      background: var(--bg-panel); border-left: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .vocab-input-row {
+      display: flex; gap: 0.3rem;
+      padding: 0.5rem 0.5rem 0.4rem; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .vocab-input {
+      flex: 1; min-width: 0; padding: 0.28rem 0.5rem;
+      border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg-surface); color: var(--text);
+      font-size: 0.77rem; outline: none;
+    }
+    .vocab-input:focus { border-color: rgba(0,200,239,0.45); }
+    .vocab-input::placeholder { color: var(--muted); }
+    .btn-vocab-add {
+      padding: 0.28rem 0.55rem; border-radius: 6px;
+      border: 1px solid rgba(0,200,239,0.3); background: var(--accent-soft);
+      color: var(--accent); font-size: 0.9rem; font-weight: 700;
+      cursor: pointer; line-height: 1; transition: background 0.14s;
+    }
+    .btn-vocab-add:hover { background: rgba(0,200,239,0.18); }
+    .word-list { list-style: none; padding: 0.3rem 0.4rem; overflow-y: auto; flex: 1; }
+    .word-item {
+      padding: 0.3rem 0.5rem; margin-bottom: 0.08rem; border-radius: 6px;
+      font-size: 0.77rem; color: var(--text);
+      display: flex; align-items: center; gap: 0.35rem; transition: background 0.12s;
+    }
+    .word-item:hover { background: rgba(255,255,255,0.05); }
+    .word-item-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); opacity: 0.6; flex-shrink: 0; }
+    .word-item-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn-word-del {
+      border: none; background: transparent; color: var(--muted);
+      font-size: 0.68rem; cursor: pointer; padding: 0.1rem 0.2rem;
+      border-radius: 4px; line-height: 1; opacity: 0;
+      transition: opacity 0.12s, color 0.12s; flex-shrink: 0;
+    }
+    .word-item:hover .btn-word-del { opacity: 1; }
+    .btn-word-del:hover { color: #ff7c6e; }
+    .word-item-empty { font-size: 0.73rem; color: var(--muted); padding: 0.6rem 0.5rem; line-height: 1.7; }
+
+    /* ── Bottom bar ───────────────────────────────────────────── */
+    .bottom-bar {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      height: var(--bottom-h);
+      background: var(--bg-panel); border-top: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 0.9rem; gap: 0.6rem; z-index: 20;
+    }
+
+    /* Mic button — OFF */
+    .mic-btn {
+      width: 52px; height: 52px; border-radius: 50%; border: none;
+      cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 37% 35%, #252d3a 0%, #151b24 45%, #0b1017 100%);
+      box-shadow: 0 0 0 1.5px rgba(255,255,255,0.1), inset 0 1px 1px rgba(255,255,255,0.07), 0 2px 8px rgba(0,0,0,0.5);
+      transition: box-shadow 0.28s, transform 0.12s, background 0.28s;
+      position: relative;
+    }
+    /* inner ring - both states */
+    .mic-btn::before, .mic-btn::after {
+      content: ''; position: absolute; border-radius: 50%;
+      opacity: 0; pointer-events: none;
+    }
+    .mic-btn::before { inset: -8px;  border: 1.5px solid rgba(0,200,239,0.45); transition: opacity 0.3s; }
+    .mic-btn::after  { inset: -16px; border: 1px   solid rgba(0,200,239,0.2);  transition: opacity 0.3s; }
+
+    .mic-btn:hover {
+      background: radial-gradient(circle at 37% 35%, #2e3d50 0%, #1a2534 45%, #0e161f 100%);
+      box-shadow: 0 0 0 1.5px rgba(0,200,239,0.25), inset 0 1px 1px rgba(255,255,255,0.1), 0 2px 12px rgba(0,0,0,0.5);
+      transform: scale(1.05);
+    }
+    .mic-btn:active { transform: scale(0.95); }
+    .mic-btn svg { width: 20px; height: 20px; color: rgba(255,255,255,0.45); transition: color 0.28s; }
+
+    /* Mic button — ON / LIVE */
+    .mic-btn.live {
+      background: radial-gradient(circle at 37% 35%, #7af8ff 0%, #00c8ef 30%, #0090b0 60%, #002a38 100%);
+      box-shadow:
+        0 0 0 2px rgba(0,220,255,0.6),
+        0 0 24px rgba(0,200,239,0.7),
+        0 0 55px rgba(0,200,239,0.35),
+        inset 0 1px 2px rgba(255,255,255,0.3);
+    }
+    .mic-btn.live:hover { transform: scale(1.05); }
+    .mic-btn.live svg  { color: #fff; }
+    .mic-btn.live::before { opacity: 1; animation: mic-ring-1 2.2s ease-in-out infinite; }
+    .mic-btn.live::after  { opacity: 1; animation: mic-ring-2 2.2s ease-in-out infinite 0.7s; }
+    @keyframes mic-ring-1 {
+      0%,100% { transform: scale(1);    opacity: 0.7; }
+      50%      { transform: scale(1.12); opacity: 0.15; }
+    }
+    @keyframes mic-ring-2 {
+      0%,100% { transform: scale(1);    opacity: 0.45; }
+      50%      { transform: scale(1.18); opacity: 0.05; }
+    }
+
+    /* Waveform + status section */
+    .wave-status {
+      flex: 1; min-width: 0; height: 42px;
+      display: flex; align-items: center;
+      border-radius: 8px; overflow: hidden; position: relative;
+    }
+    .wave-status canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%; display: none;
+    }
+    .wave-status canvas.visible { display: block; }
+    .status-idle {
+      width: 100%; display: flex; align-items: center;
+      justify-content: center; gap: 0.5rem;
+    }
+    .status-idle.hidden { display: none; }
+    .status-text { font-size: 0.82rem; color: var(--muted); transition: color 0.25s; }
+    .status-text.live {
+      color: var(--accent);
+      animation: status-pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes status-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+    /* REC badge */
+    .rec-badge {
+      display: inline-flex; align-items: center; gap: 0.32rem;
+      padding: 0.26rem 0.72rem; border-radius: 20px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+      color: var(--text-dim); font-size: 0.74rem; font-weight: 800;
+      letter-spacing: 0.08em; user-select: none; flex-shrink: 0;
+      box-shadow: none;
+    }
+    .rec-badge.active {
+      background: rgba(220,38,38,0.18);
+      border-color: rgba(220,38,38,0.5);
+      color: #fca5a5;
+      box-shadow: 0 0 10px rgba(220,38,38,0.25);
+    }
+    .rec-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #6b7280;
+      box-shadow: none;
+    }
+    .rec-badge.active .rec-dot {
+      background: #ef4444;
+      box-shadow: 0 0 6px #ef4444;
+      animation: rec-blink 1s ease-in-out infinite;
+    }
+    @keyframes rec-blink { 0%,100% { opacity: 1; box-shadow: 0 0 6px #ef4444; } 50% { opacity: 0.2; box-shadow: none; } }
+
+    /* Bottom bar — recording highlight */
+    .bottom-bar { transition: border-top-color 0.35s; }
+    body.recording .bottom-bar {
+      border-top-color: rgba(0,200,239,0.38);
+      background: linear-gradient(to top, var(--bg-panel) 60%, rgba(0,200,239,0.04));
+    }
+
+    /* Bar buttons */
+    .btn-bar {
+      padding: 0.28rem 0.7rem; border-radius: 7px;
+      border: 1px solid var(--border); background: rgba(255,255,255,0.04);
+      color: var(--text); font-size: 0.76rem; font-weight: 500;
+      cursor: pointer; display: flex; align-items: center; gap: 0.28rem;
+      transition: background 0.14s; flex-shrink: 0;
+    }
+    .btn-bar svg { width: 13px; height: 13px; opacity: 0.75; }
+    .btn-bar:hover { background: rgba(255,255,255,0.09); }
+    .btn-bar--reset { color: #ffd47a; }
+    .btn-bar--reset:hover { background: rgba(255,200,80,0.1); }
+    .btn-sidebar-toggle { display: none; }
+
+    /* ── Sidebar overlay ──────────────────────────────────────── */
+    .sidebar-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.22s;
+    }
+    .sidebar-overlay.visible { opacity: 1; pointer-events: auto; }
+
+    /* ── Responsive ───────────────────────────────────────────── */
+    @media (max-width: 899px) {
+      .sidebar-right {
+        position: fixed; right: 0; top: var(--header-h); bottom: var(--bottom-h);
+        z-index: 45; transform: translateX(100%); transition: transform 0.25s ease;
+      }
+      .sidebar-right.open { transform: translateX(0); box-shadow: -4px 0 20px rgba(0,0,0,0.55); }
+      .btn-sidebar-toggle--right { display: flex; }
+    }
+    @media (max-width: 699px) {
+      .sidebar-left {
+        position: fixed; left: 0; top: var(--header-h); bottom: var(--bottom-h);
+        z-index: 45; transform: translateX(-100%); transition: transform 0.25s ease;
+      }
+      .sidebar-left.open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.55); }
+      .btn-sidebar-toggle--left { display: flex; }
+      .messages-area { padding-left: 1rem; padding-right: 1rem; }
+    }
+    @media (max-width: 520px) {
+      .btn-hdr span { display: none; }
+    }
+
+    /* ── Toast ────────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: calc(var(--bottom-h) + 0.75rem); left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: var(--bg-surface); color: var(--text);
+      padding: 0.4rem 0.95rem; border-radius: 8px;
+      font-size: 0.8rem; border: 1px solid var(--border);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.18s, transform 0.18s;
+      z-index: 100; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/>
+          <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
+          <line x1="12" y1="18" x2="12" y2="22"/>
+        </svg>
+      </div>
+      Voice Finding
+    </div>
+    <div class="header-spacer"></div>
+    <div class="header-actions">
+      <button type="button" class="btn-hdr btn-hdr--accent" id="btnSaveLog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+        </svg>
+        <span>로그 저장</span>
+      </button>
+      <button type="button" class="btn-hdr btn-hdr--danger" id="btnQuit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        <span>나가기</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Body ───────────────────────────────────────────────── -->
+  <div class="body">
+
+    <!-- Left sidebar: session history (GPT-style) -->
+    <aside class="sidebar-left" aria-label="대화 목록">
+      <div class="sidebar-head">
+        대화
+        <button type="button" class="btn-new-sm" id="btnNewSession">+ 새 대화</button>
+      </div>
+      <div class="sidebar-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="sessionSearch" placeholder="대화 검색…" autocomplete="off" />
+      </div>
+      <ul class="session-list" id="sessionList" role="listbox" aria-label="저장된 대화"></ul>
+    </aside>
+
+    <!-- Center: chat messages -->
+    <main class="main-center" id="mainContent" aria-live="polite">
+      <div class="messages-area" id="messagesArea">
+        <!-- recording banner — visible only while recording -->
+        <div class="recording-banner hidden" id="recordingBanner" aria-live="assertive">
+          <span class="banner-dot" aria-hidden="true"></span>
+          녹음 중&nbsp;&nbsp;—&nbsp;&nbsp;마이크 버튼을 다시 눌러 중지하세요
+        </div>
+
+        <!-- welcome shown when no messages -->
+        <div class="welcome-wrap" id="welcomeWrap">
+          <button type="button" class="welcome-icon welcome-mic-btn" id="welcomeMicToggle" aria-label="음성 인식 시작/중지">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/>
+              <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
+              <line x1="12" y1="18" x2="12" y2="22"/>
+            </svg>
+          </button>
+          <div class="welcome-title">Voice Finding</div>
+          <div class="welcome-sub">아래 마이크 버튼을 눌러<br>음성 인식을 시작하세요</div>
+        </div>
+        <!-- message bubbles injected by app.js -->
+      </div>
+    </main>
+
+    <!-- Right sidebar: vocabulary management -->
+    <aside class="sidebar-right" aria-label="어휘 관리">
+      <div class="sidebar-head">어휘 관리</div>
+      <div class="vocab-input-row">
+        <input type="text" id="vocabInput" class="vocab-input" placeholder="단어 입력 후 Enter" maxlength="30" />
+        <button type="button" id="btnAddVocab" class="btn-vocab-add" title="어휘 추가">+</button>
+      </div>
+      <ul class="word-list" id="wordList">
+        <li class="word-item-empty">단어를 추가하면<br>STT 교정에 활용됩니다</li>
+      </ul>
+    </aside>
+
+  </div>
+
+  <!-- ── Bottom bar: mic + waveform + controls ──────────────── -->
+  <div class="bottom-bar">
+    <button type="button" class="btn-bar btn-bar--reset" id="btnRerecord">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-.82-3.98l-2.12 2.12"/>
+      </svg>
+      재녹음
+    </button>
+
+    <!-- waveform + status -->
+    <div class="wave-status" id="waveStatus">
+      <canvas id="waveformCanvas"></canvas>
+      <div class="status-idle" id="statusIdle">
+        <span class="status-text" id="statusText">마이크를 눌러 시작</span>
+      </div>
+    </div>
+
+    <!-- mic button -->
+    <button type="button" class="mic-btn" id="micToggle" aria-pressed="false" aria-label="음성 인식 시작">
+      <!-- OFF: 사선 그어진 마이크 (인식 꺼짐) -->
+      <svg class="icon-idle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/>
+        <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
+        <line x1="12" y1="18" x2="12" y2="22"/>
+        <line x1="8" y1="22" x2="16" y2="22"/>
+        <line x1="3" y1="3" x2="21" y2="21"/>
+      </svg>
+      <!-- ON: ■ 정지 아이콘 (클릭하면 중지됨을 명확히 표시) -->
+      <svg class="icon-stop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <rect x="6" y="6" width="12" height="12" rx="2.5"/>
+      </svg>
+      <!-- icon-live: CSS가 icon-stop으로 대체하므로 DOM 유지만 -->
+      <svg class="icon-live" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none" aria-hidden="true">
+        <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/>
+        <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
+        <line x1="12" y1="18" x2="12" y2="22"/>
+        <line x1="8" y1="22" x2="16" y2="22"/>
+      </svg>
+    </button>
+
+    <!-- REC badge -->
+    <div id="recBadge" class="rec-badge" hidden aria-label="녹음 중">
+      <span class="rec-dot" aria-hidden="true"></span>REC
+    </div>
+
+    <!-- mobile sidebar toggles -->
+    <button type="button" class="btn-bar btn-sidebar-toggle btn-sidebar-toggle--left" id="btnToggleLeft" aria-label="대화 목록">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+      대화
+    </button>
+    <button type="button" class="btn-bar btn-sidebar-toggle btn-sidebar-toggle--right" id="btnToggleRight" aria-label="어휘 관리">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 6h16M4 12h10M4 18h14"/>
+      </svg>
+      어휘
+    </button>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
