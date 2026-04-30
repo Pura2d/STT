@@ -12,18 +12,17 @@ Vosk 한국어 STT WebSocket 서버.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Protocol
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import vosk
-
-from stt_corrector import SemanticCorrector
 
 # Vosk 내부 로그 완전 억제 — stderr 오염 없이 Python 로그만 사용
 vosk.SetLogLevel(-1)
@@ -70,6 +69,11 @@ ENABLE_CORRECTOR = os.environ.get("STT_ENABLE_CORRECTOR", "1").lower() in {
     "yes",
     "y",
 }
+# 교정 백엔드: local(기본) | cloud
+CORRECTOR_BACKEND = os.environ.get("STT_CORRECTOR_BACKEND", "local").strip().lower()
+# 교정기 구현체를 런타임에 교체할 수 있도록 클래스 경로를 노출합니다.
+# STT_CORRECTOR_CLASS를 지정하지 않으면 backend 값으로 기본 클래스를 자동 선택합니다.
+CORRECTOR_CLASS = os.environ.get("STT_CORRECTOR_CLASS", "").strip()
 # 실시간 우선 모드: 확정 결과를 즉시 보내고(기본), 교정은 선택적으로만 적용.
 APPLY_CORRECTION_ON_FINAL = os.environ.get("STT_APPLY_CORRECTION_ON_FINAL", "1").lower() in {
     "1",
@@ -131,7 +135,145 @@ def _build_vosk_grammar(words: list[str]) -> str | None:
 # ── 전역 상태 ─────────────────────────────────────────────────────────────────
 
 _model:     vosk.Model | None        = None
-_corrector: SemanticCorrector | None = None
+
+
+class CorrectorResult(Protocol):
+    text: str
+    raw: str
+    corrections: list[Any]
+
+
+class CorrectorEngine(Protocol):
+    @property
+    def vocabulary(self) -> list[str]:
+        ...
+
+    def load_vocabulary(self, words: list[str]) -> None:
+        ...
+
+    def add_words(self, words: list[str]) -> None:
+        ...
+
+    def remove_word(self, word: str) -> None:
+        ...
+
+    def process(self, raw_text: str) -> CorrectorResult:
+        ...
+
+
+class _PassthroughResult:
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.raw = text
+        self.corrections: list[Any] = []
+
+
+class PassthroughCorrector:
+    """교정기를 끄거나 로드 실패 시 사용하는 no-op 교정기."""
+
+    def __init__(self, vocabulary: list[str] | None = None, **_: Any) -> None:
+        self._vocab: list[str] = []
+        if vocabulary:
+            self.load_vocabulary(vocabulary)
+
+    @property
+    def vocabulary(self) -> list[str]:
+        return self._vocab
+
+    def load_vocabulary(self, words: list[str]) -> None:
+        seen: set[str] = set()
+        clean: list[str] = []
+        for word in words:
+            token = str(word).strip()
+            if token and token not in seen:
+                seen.add(token)
+                clean.append(token)
+        self._vocab = clean
+
+    def add_words(self, words: list[str]) -> None:
+        self.load_vocabulary(self._vocab + list(words))
+
+    def remove_word(self, word: str) -> None:
+        target = word.strip()
+        self.load_vocabulary([w for w in self._vocab if w != target])
+
+    def process(self, raw_text: str) -> _PassthroughResult:
+        return _PassthroughResult(raw_text)
+
+
+class LegacyCorrectorAdapter:
+    """기존 SemanticCorrector 인터페이스(_vocab 기반)를 표준화합니다."""
+
+    def __init__(self, engine: Any) -> None:
+        self._engine = engine
+
+    @property
+    def vocabulary(self) -> list[str]:
+        return list(getattr(self._engine, "_vocab", []))
+
+    def load_vocabulary(self, words: list[str]) -> None:
+        self._engine.load_vocabulary(words)
+
+    def add_words(self, words: list[str]) -> None:
+        self._engine.add_words(words)
+
+    def remove_word(self, word: str) -> None:
+        self._engine.remove_word(word)
+
+    def process(self, raw_text: str) -> CorrectorResult:
+        return self._engine.process(raw_text)
+
+
+def _load_corrector_class(path: str):
+    module_name, _, class_name = path.rpartition(".")
+    if not module_name or not class_name:
+        raise ValueError(f"잘못된 STT_CORRECTOR_CLASS 값: {path!r}")
+    module = importlib.import_module(module_name)
+    cls = getattr(module, class_name, None)
+    if cls is None:
+        raise AttributeError(f"{module_name!r}에 {class_name!r} 클래스가 없습니다.")
+    return cls
+
+
+def _create_corrector(vocab: list[str]) -> CorrectorEngine:
+    if not ENABLE_CORRECTOR:
+        logger.info("교정기 비활성화(STT_ENABLE_CORRECTOR=0) — PassthroughCorrector 사용")
+        return PassthroughCorrector(vocabulary=vocab)
+
+    try:
+        class_path = CORRECTOR_CLASS
+        if not class_path:
+            if CORRECTOR_BACKEND == "cloud":
+                class_path = "cloud_corrector.CloudLlmCorrector"
+            else:
+                class_path = "stt_corrector.SemanticCorrector"
+
+        corrector_cls = _load_corrector_class(class_path)
+        engine = corrector_cls(
+            vocabulary=vocab, threshold=CORRECT_THRESHOLD, ngram=CORRECT_NGRAM
+        )
+        logger.info(
+            "교정기 초기화 완료 — backend=%s, class=%s, 어휘 %d개, threshold=%.2f, ngram=%d",
+            CORRECTOR_BACKEND,
+            class_path,
+            len(vocab),
+            CORRECT_THRESHOLD,
+            CORRECT_NGRAM,
+        )
+        if hasattr(engine, "vocabulary"):
+            return engine
+        return LegacyCorrectorAdapter(engine)
+    except Exception as e:
+        logger.warning(
+            "교정기 로드 실패(backend=%s, class=%s): %s — PassthroughCorrector로 폴백합니다.",
+            CORRECTOR_BACKEND,
+            CORRECTOR_CLASS or "(auto)",
+            e,
+        )
+        return PassthroughCorrector(vocabulary=vocab)
+
+
+_corrector: CorrectorEngine | None = None
 
 
 # ── 앱 수명 주기 ──────────────────────────────────────────────────────────────
@@ -149,20 +291,8 @@ async def lifespan(app: FastAPI):
     logger.info("Vosk 모델 로드 중: %s", MODEL_PATH)
     _model = vosk.Model(MODEL_PATH)
 
-    if ENABLE_CORRECTOR:
-        vocab = _load_vocab_file()
-        _corrector = SemanticCorrector(
-            vocabulary=vocab, threshold=CORRECT_THRESHOLD, ngram=CORRECT_NGRAM
-        )
-        logger.info(
-            "SemanticCorrector 초기화 완료 — 어휘 %d개, threshold=%.2f, ngram=%d",
-            len(vocab),
-            CORRECT_THRESHOLD,
-            CORRECT_NGRAM,
-        )
-    else:
-        _corrector = None
-        logger.info("SemanticCorrector 비활성화(STT_ENABLE_CORRECTOR=0)")
+    vocab = _load_vocab_file()
+    _corrector = _create_corrector(vocab)
 
     yield
 
@@ -191,7 +321,8 @@ def health() -> dict[str, Any]:
     return {
         "status":       "ok",
         "model_loaded": _model is not None,
-        "vocab_size":   len(_corrector._vocab) if _corrector else 0,
+        "corrector_backend": CORRECTOR_BACKEND,
+        "vocab_size":   len(_corrector.vocabulary) if _corrector else 0,
     }
 
 
@@ -199,7 +330,7 @@ def health() -> dict[str, Any]:
 
 @app.get("/api/vocabulary")
 def get_vocabulary():
-    return {"words": _corrector._vocab if _corrector else []}
+    return {"words": _corrector.vocabulary if _corrector else []}
 
 
 @app.post("/api/vocabulary")
@@ -210,18 +341,18 @@ async def add_vocabulary(request: Request):
         return JSONResponse({"error": "words 필드는 배열이어야 합니다."}, status_code=400)
     if _corrector:
         _corrector.add_words(words)
-        _save_vocab_file(_corrector._vocab)
-        logger.info("어휘 추가: %s (총 %d개)", words, len(_corrector._vocab))
-    return {"words": _corrector._vocab if _corrector else []}
+        _save_vocab_file(_corrector.vocabulary)
+        logger.info("어휘 추가: %s (총 %d개)", words, len(_corrector.vocabulary))
+    return {"words": _corrector.vocabulary if _corrector else []}
 
 
 @app.delete("/api/vocabulary/{word:path}")
 def delete_vocabulary(word: str):
     if _corrector:
         _corrector.remove_word(word)
-        _save_vocab_file(_corrector._vocab)
-        logger.info("어휘 제거: %r (총 %d개)", word, len(_corrector._vocab))
-    return {"words": _corrector._vocab if _corrector else []}
+        _save_vocab_file(_corrector.vocabulary)
+        logger.info("어휘 제거: %r (총 %d개)", word, len(_corrector.vocabulary))
+    return {"words": _corrector.vocabulary if _corrector else []}
 
 
 @app.delete("/api/vocabulary")
@@ -278,8 +409,8 @@ async def stt_websocket(websocket: WebSocket) -> None:
 
     # ── VOSK 인식기 초기화 ──────────────────────────────────────────────────────
     grammar = None
-    if USE_VOCAB_GRAMMAR and _corrector and _corrector._vocab:
-        grammar = _build_vosk_grammar(_corrector._vocab)
+    if USE_VOCAB_GRAMMAR and _corrector and _corrector.vocabulary:
+        grammar = _build_vosk_grammar(_corrector.vocabulary)
     if grammar:
         rec = vosk.KaldiRecognizer(_model, SAMPLE_RATE, grammar)
     else:

@@ -1,10 +1,10 @@
 # 실시간 STT — 한국어 음성 인식 **데스크톱 앱**
 
-이 저장소의 **제품 형태는 데스크톱 애플리케이션**입니다. 사용자 PC 안에서만 동작하며, **원격 서버나 클라우드 STT API에 의존하지 않습니다.**
+이 저장소의 **제품 형태는 데스크톱 애플리케이션**입니다. 사용자 PC 안에서만 동작하며, STT 인식 자체는 로컬(Vosk)에서 처리합니다.
 
 구현상 **Electron**이 창·마이크·파일 저장 등 UI를 담당하고, **같은 PC에서만** 떠 있는 **로컬 STT 엔진 프로세스**(Python + FastAPI + Vosk)가 음성을 받아 처리합니다. 둘은 `127.0.0.1`로만 통신합니다.
 
-마이크 오디오는 **WebSocket**으로 스트리밍하고, **PCM 16 kHz 모노** 기준으로 인식합니다. 확정 구간에는 **의미 교정(어휘 기반)** 파이프라인을 거친 뒤 앱 화면으로 돌려줍니다.
+마이크 오디오는 **WebSocket**으로 스트리밍하고, **PCM 16 kHz 모노** 기준으로 인식합니다. 확정 구간에는 **교정 파이프라인(로컬 또는 클라우드 API 선택)** 을 거친 뒤 앱 화면으로 돌려줍니다.
 
 ---
 
@@ -16,7 +16,7 @@
 | **역할** | 실시간 한국어 STT + 세션(대화) 목록 + 로그 저장 |
 | **UI** | Electron(Chromium) — 화면은 `electron/renderer`, 내용은 로컬 엔진이 `/ui`로 제공 |
 | **STT 엔진** | Vosk (`KaldiRecognizer`) + 한국어 모델(경로 자동 탐색 또는 `VOSK_MODEL_PATH`) |
-| **후처리** | `stt_corrector.SemanticCorrector` — 정규화, 자모 TF-IDF, 어휘 코사인 유사도 교정 |
+| **후처리** | `local`(`SemanticCorrector`) 또는 `cloud`(OpenAI/Anthropic/Gemini API) 선택 가능 |
 | **패키징** | PyInstaller로 STT 실행 파일 번들 + electron-builder로 앱 설치본 — 선택적으로 Electron Forge |
 
 ---
@@ -28,7 +28,7 @@
 | **데스크톱 셸** | [Electron](https://www.electronjs.org/) **41.2.0** (Chromium + Node) |
 | **메인 프로세스** | `electron/main.cjs` — 창, 자식 프로세스 기동, IPC, 마이크 권한(`session`) |
 | **Preload** | `contextBridge` → `window.stt` (저장 대화상자, 종료 IPC) |
-| **로컬 STT 엔진** | Python **3.x**, **FastAPI**, **Uvicorn** — **본 PC 전용**, 외부 네트워크로 음성을 보내지 않음 |
+| **로컬 STT 엔진** | Python **3.x**, **FastAPI**, **Uvicorn** — **본 PC 전용** |
 | **인식** | **Vosk** (`vosk.KaldiRecognizer`) |
 | **앱 내부 통신** | **WebSocket** (`/ws/stt`) — PCM 바이너리 / JSON(partial·final) |
 | **UI 정적 파일** | FastAPI `StaticFiles` — `UI_DIR`은 Electron이 로컬 경로로 주입 |
@@ -80,7 +80,7 @@ flowchart TB
   subgraph local [같은 PC 로컬 STT 엔진]
     F[FastAPI Uvicorn]
     V[Vosk KaldiRecognizer]
-    C[SemanticCorrector]
+    C[Corrector local/cloud]
   end
   M -->|"자식 프로세스 spawn 환경변수로 모델·UI 경로 전달"| F
   W -->|"HTTP localhost /ui"| F
@@ -97,7 +97,7 @@ flowchart TB
 3. **앱 창**에서 마이크 캡처 → 필요 시 리샘플 → **PCM**을 WebSocket으로 **로컬 엔진**에만 보낸다.
 4. 엔진이 Vosk로 처리한다.
    - **partial**: 실시간 미리보기.
-   - **final**: 교정 파이프라인 후 `text`, `original`, `corrections` 등으로 응답.
+   - **final**: 교정 파이프라인(local/cloud 선택) 후 `text`, `original`, `corrections` 등으로 응답.
 5. **어휘**는 `/api/vocabulary`로 관리하며, 패키지 앱에서는 **`VOCAB_PATH`** 가 사용자 데이터 폴더를 가리키도록 설정된다.
 
 **즉, “서버를 켜 두는 제품”이 아니라 “앱을 실행하면 그 안에서만 STT가 돌아가는 구조”입니다.**
@@ -129,6 +129,20 @@ flowchart TB
 | `npm run start` / `package` / `make` | Electron Forge ([`forge.config.js`](forge.config.js)) |
 
 한국어 Vosk 모델은 저장소 내 경로에 풀려 있어야 하며, 필요 시 **`VOSK_MODEL_PATH`** 로 지정합니다.
+
+### 교정기 백엔드 전환 (local / cloud)
+
+- `STT_ENABLE_CORRECTOR=1` : 교정기 사용 (`0`이면 passthrough)
+- `STT_CORRECTOR_BACKEND=local|cloud` : 백엔드 선택 (기본 `local`)
+- `STT_CORRECTOR_CLASS=<module.Class>` : 구현체 직접 지정(선택)
+- `STT_APPLY_CORRECTION_ON_FINAL=1` : final 결과에 교정 적용
+
+`cloud` 선택 시:
+
+- `STT_CLOUD_PROVIDER=openai|anthropic|gemini`
+- `STT_CLOUD_API_KEY=<your key>`
+- `STT_CLOUD_MODEL=<model name>` (선택)
+- `STT_CLOUD_TIMEOUT_SEC=8` (선택)
 
 ---
 

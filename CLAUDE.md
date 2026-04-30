@@ -45,7 +45,7 @@ Electron main process (`electron/main.cjs`) spawns a Python child process and wa
 - `WS /ws/stt` — accepts raw PCM binary (16-bit LE, 16 kHz mono), streams through Vosk, returns `{type:"partial", partial}` or `{type:"final", text, original, corrections[]}`
 - `GET|POST|DELETE /api/vocabulary` — runtime vocabulary management; persisted to `userData/vocabulary.json`
 
-**STT pipeline**: PCM → `vosk.KaldiRecognizer` → on final result → `SemanticCorrector.process()` (only when `STT_APPLY_CORRECTION_ON_FINAL=1`; default off for minimum latency)
+**STT pipeline**: PCM → `vosk.KaldiRecognizer` → on final result → corrector(`local` or `cloud`) `process()` (only when `STT_APPLY_CORRECTION_ON_FINAL=1`)
 
 **`stt_corrector.py`**: zero-dependency pure-Python module. Pipeline: normalize (filler removal) → jamo decomposition → char n-gram TF-IDF vectorization → cosine similarity match against vocabulary → `CorrectionResult`.
 
@@ -85,6 +85,12 @@ Packaged binary resolves paths via `resolveResource()` which checks both `proces
 | `UI_DIR` | `electron/renderer` | 정적 파일 루트 |
 | `HOST` / `PORT` | `127.0.0.1:18765` | 서버 바인딩 |
 | `VOCAB_PATH` | `userData/vocabulary.json` | 어휘 파일 경로 |
-| `STT_ENABLE_CORRECTOR` | `1` | SemanticCorrector 활성화 |
-| `STT_APPLY_CORRECTION_ON_FINAL` | `0` | 교정 적용 (0=지연최소, 1=교정우선) |
-| `CORRECT_THRESHOLD` | `0.86` | 코사인 유사도 임계값 |
+| `STT_ENABLE_CORRECTOR` | `1` | 교정기 활성화 (0이면 passthrough) |
+| `STT_CORRECTOR_BACKEND` | `local` | `local` 또는 `cloud` 선택 |
+| `STT_CORRECTOR_CLASS` | auto | 교정기 클래스 경로 직접 지정 (없으면 backend 기본값 사용) |
+| `STT_APPLY_CORRECTION_ON_FINAL` | `1` | 교정 적용 (0=지연최소, 1=교정우선) |
+| `CORRECT_THRESHOLD` | `0.86` | local 교정기의 코사인 유사도 임계값 |
+| `STT_CLOUD_PROVIDER` | `openai` | cloud 제공자 (`openai`, `anthropic`, `gemini`) |
+| `STT_CLOUD_API_KEY` | - | cloud API 키 |
+| `STT_CLOUD_MODEL` | provider default | cloud 모델명 |
+| `STT_CLOUD_TIMEOUT_SEC` | `8` | cloud 요청 타임아웃(초) |
